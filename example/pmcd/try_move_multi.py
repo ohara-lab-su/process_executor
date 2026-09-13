@@ -41,8 +41,8 @@ def main() -> None:
         # if target > 8388607:
         #     # target = before - TEST_PULSE
         #     target = before - 10
-        # target = 0
-        target = 1000
+        target = 0
+        # target = 1000
 
         print(f"[INFO] {'move'}: {target}")
         ctrl.move(MOTOR, target, backlash=False)

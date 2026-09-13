@@ -4,7 +4,7 @@ import multiprocessing
 import time
 import traceback
 import uuid
-from typing import Any, Callable, Dict, Optional
+from typing import Any, Callable, Dict, Optional, Tuple, Type
 
 from .shared_context import SharedContext
 
@@ -115,11 +115,56 @@ def _worker_main(
     }
 
 
+class _WorkerClassFactory:
+    """Instantiate an existing controller class inside each worker process.
+
+    Args:
+        worker_class: Existing controller class to instantiate.
+        worker_args: Positional arguments passed to the controller constructor.
+        worker_kwargs: Keyword arguments passed to the controller constructor.
+    """
+
+    def __init__(
+        self,
+        worker_class: Type[Any],
+        worker_args: Tuple[Any, ...],
+        worker_kwargs: Dict[str, Any],
+    ) -> None:
+        self._worker_class = worker_class
+        self._worker_args = worker_args
+        self._worker_kwargs = worker_kwargs
+
+    def __call__(
+        self,
+        context: SharedContext,
+    ) -> Any:
+        """Create one worker-local controller instance.
+
+        Args:
+            context: Shared executor context. Existing controller classes do
+                not need to know about it.
+
+        Returns:
+            Newly created controller instance.
+        """
+        _ = context
+
+        return self._worker_class(
+            *self._worker_args,
+            **self._worker_kwargs,
+        )
+
+
 class ProcessExecutor:
     """Generic multiprocessing execution support.
 
     The executor does not know device protocols, transports, or controller
-    semantics. Each worker owns one instance returned by ``worker_factory``.
+    semantics. A worker can be created either from an existing
+    ``worker_factory(context)`` or directly from an existing controller
+    ``worker_class``.
+
+    ``worker_class`` exists so device-side controller classes do not need
+    worker-specific wrappers merely to run under multiprocessing.
 
     Args:
         worker_factory: Callable that receives ``SharedContext`` and returns
@@ -127,19 +172,64 @@ class ProcessExecutor:
         worker_count: Number of worker processes kept ready.
         start_method: Multiprocessing start method. If omitted, Python's
             platform default is used.
+        worker_class: Existing controller class instantiated in each worker.
+        worker_args: Positional arguments passed to ``worker_class``.
+        worker_kwargs: Keyword arguments passed to ``worker_class``.
+        logger: Parent-process logger retained by the executor. The logger is
+            not passed into worker processes automatically.
     """
 
     def __init__(
         self,
-        worker_factory: Callable[[SharedContext], Any],
+        worker_factory: Optional[Callable[[SharedContext], Any]] = None,
         worker_count: int = 4,
         start_method: Optional[str] = None,
+        *,
+        worker_class: Optional[Type[Any]] = None,
+        worker_args: Optional[Tuple[Any, ...]] = None,
+        worker_kwargs: Optional[Dict[str, Any]] = None,
+        logger: Any = None,
     ) -> None:
         if worker_count < 1:
             raise ValueError("worker_count must be 1 or greater")
 
-        self._worker_factory = worker_factory
+        if worker_factory is None:
+            if worker_class is None:
+                raise ValueError(
+                    "worker_factory or worker_class must be specified"
+                )
+
+            if worker_args is None:
+                worker_args = ()
+
+            if worker_kwargs is None:
+                worker_kwargs = {}
+
+            self._worker_factory = _WorkerClassFactory(
+                worker_class=worker_class,
+                worker_args=worker_args,
+                worker_kwargs=worker_kwargs,
+            )
+        else:
+            if worker_class is not None:
+                raise ValueError(
+                    "worker_factory and worker_class cannot be used together"
+                )
+
+            if worker_args is not None:
+                raise ValueError(
+                    "worker_args is only valid with worker_class"
+                )
+
+            if worker_kwargs is not None:
+                raise ValueError(
+                    "worker_kwargs is only valid with worker_class"
+                )
+
+            self._worker_factory = worker_factory
+
         self._worker_count = worker_count
+        self._logger = logger
         self._mp_context = multiprocessing.get_context(start_method)
 
         self._manager = self._mp_context.Manager()
