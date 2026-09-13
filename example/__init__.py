@@ -1,1 +1,1 @@
-"""Runnable examples for process-executor."""
+"""process-executor の example package。"""

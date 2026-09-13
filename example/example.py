@@ -1,40 +1,54 @@
-"""Executable example for the process-executor package."""
+"""ProcessExecutor を装置制御から使う形を示す example。"""
 
 import time
 
-from example.dummy_ctrl import DummyCtrl
+from x_logger import XLogger
+
+from dummy_ctrl import DummyCtrl
 
 
 def main() -> None:
-    """Run the dummy controller example."""
-    with DummyCtrl(worker_count=2) as ctrl:
-        job_a = ctrl.slow_add(10, 20, delay_sec=0.5)
-        job_b = ctrl.slow_add(1, 2, delay_sec=0.5)
+    """get 実行中に別 worker へ query を投入する。"""
+    logger = XLogger(
+        log_level="INFO",
+        logger_name="process_executor.example",
+    )
 
-        print("submitted:", job_a, job_b)
+    with DummyCtrl(
+        worker_count=2,
+        start_method="spawn",
+        logger=logger,
+    ) as ctrl:
+        get_job_id = ctrl.get(123, delay_sec=0.5)
+        query_job_id = ctrl.query("controller_status")
 
         while True:
-            state_a = ctrl.state(job_a)
-            state_b = ctrl.state(job_b)
+            get_state = ctrl.state(get_job_id)
+            query_state = ctrl.state(query_job_id)
 
-            print("state:", state_a, state_b)
+            logger.info(
+                "job state: get=%s query=%s",
+                get_state,
+                query_state,
+            )
 
-            if state_a == "succeeded" and state_b == "succeeded":
-                break
+            get_finished = get_state == "succeeded"
+            query_finished = query_state == "succeeded"
+
+            if get_finished:
+                if query_finished:
+                    break
 
             time.sleep(0.05)
 
-        print("result:", ctrl.result(job_a))
-        print("result:", ctrl.result(job_b))
+        get_result = ctrl.result(get_job_id)
+        query_result = ctrl.result(query_job_id)
 
-        set_job = ctrl.set_value(123)
-        ctrl.wait(set_job, timeout_sec=2.0)
-
-        get_job = ctrl.get_value()
-        value = ctrl.wait(get_job, timeout_sec=2.0)
-
-        print("shared value:", value)
-        print("workers:", ctrl.workers())
+        logger.info(
+            "example result: get=%s query=%s",
+            get_result,
+            query_result,
+        )
 
 
 if __name__ == "__main__":

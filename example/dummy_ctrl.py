@@ -1,90 +1,113 @@
-"""Multiprocess controller built from ProcessExecutor and DummyControl."""
+"""DummySingle を ProcessExecutor で multiprocessing 化する example。"""
 
-from typing import Any, Dict, Optional
+from typing import Any, Optional
 
-from process_executor import ProcessExecutor, SharedContext
+from process_executor import ProcessExecutor
+from process_executor import SharedContext
+from x_logger import XLogger
 
-from example.dummy_device import DummyControl
+from dummy_single import DummySingle
 
 
-def create_dummy_control(context: SharedContext) -> DummyControl:
-    """Create one worker-local DummyControl instance."""
-    return DummyControl(context)
+def create_dummy_single(context: SharedContext) -> DummySingle:
+    """worker ごとの DummySingle を生成する。"""
+    _ = context
+    return DummySingle()
 
 
 class DummyCtrl:
-    """Public multiprocess controller for the dummy device."""
+    """DummySingle を multiprocessing 化したダミー制御クラス。"""
 
     def __init__(
         self,
         worker_count: int = 2,
         start_method: Optional[str] = None,
+        logger: Optional[XLogger] = None,
     ) -> None:
+        if logger is None:
+            self._logger = XLogger(
+                log_level="INFO",
+                logger_name="DummyCtrl",
+            )
+        else:
+            self._logger = logger
+
         self._executor = ProcessExecutor(
-            worker_factory=create_dummy_control,
+            worker_factory=create_dummy_single,
             worker_count=worker_count,
             start_method=start_method,
         )
 
-    def set_value(self, value: int) -> str:
-        """Submit set_value without waiting."""
-        return self._executor.submit("set_value", value)
-
-    def get_value(self) -> str:
-        """Submit get_value without waiting."""
-        return self._executor.submit("get_value")
-
-    def slow_add(
-        self,
-        left: int,
-        right: int,
-        delay_sec: float = 0.2,
-    ) -> str:
-        """Submit slow_add without waiting."""
-        return self._executor.submit(
-            "slow_add",
-            left,
-            right,
-            delay_sec,
+        self._logger.info(
+            "DummyCtrl started: worker_count=%s",
+            worker_count,
         )
 
-    def fail(self) -> str:
-        """Submit fail without waiting."""
-        return self._executor.submit("fail")
+    def query(self, name: str) -> str:
+        """query job を投入する。"""
+        job_id = self._executor.submit("query", name)
+        self._logger.info(
+            "query submitted: job_id=%s name=%s",
+            job_id,
+            name,
+        )
+        return job_id
+
+    def get(self, value: int, delay_sec: float = 0.5) -> str:
+        """get job を投入する。"""
+        job_id = self._executor.submit("get", value, delay_sec)
+        self._logger.info(
+            "get submitted: job_id=%s value=%s",
+            job_id,
+            value,
+        )
+        return job_id
 
     def state(self, job_id: str) -> Optional[str]:
-        """Return a job state."""
+        """job state を取得する。"""
         return self._executor.state(job_id)
 
-    def job(self, job_id: str) -> Optional[Dict[str, Any]]:
-        """Return one job snapshot."""
-        return self._executor.job(job_id)
-
     def result(self, job_id: str) -> Any:
-        """Return a completed job result."""
-        return self._executor.result(job_id)
+        """完了済み job の結果を取得する。"""
+        result = self._executor.result(job_id)
+        self._logger.info(
+            "result received: job_id=%s result=%s",
+            job_id,
+            result,
+        )
+        return result
 
     def wait(
         self,
         job_id: str,
         timeout_sec: Optional[float] = None,
     ) -> Any:
-        """Explicitly wait for a job."""
-        return self._executor.wait(
+        """job の完了を待つ。"""
+        result = self._executor.wait(
             job_id,
             timeout_sec=timeout_sec,
         )
-
-    def workers(self) -> Dict[str, Dict[str, Any]]:
-        """Return worker snapshots."""
-        return self._executor.workers()
+        self._logger.info(
+            "job completed: job_id=%s result=%s",
+            job_id,
+            result,
+        )
+        return result
 
     def close(self) -> None:
-        """Close the executor."""
+        """ProcessExecutor を終了する。"""
         self._executor.close()
+        self._logger.info("DummyCtrl stopped")
 
     def __enter__(self) -> "DummyCtrl":
+        """with 文で使用する DummyCtrl 自身を返す。"""
         return self
 
-    def __exit__(self, exc_type: Any, exc_value: Any, exc_tb: Any) -> None:
+    def __exit__(
+        self,
+        exc_type: Any,
+        exc_value: Any,
+        exc_tb: Any,
+    ) -> None:
+        """with 文終了時に終了処理を行う。"""
         self.close()
