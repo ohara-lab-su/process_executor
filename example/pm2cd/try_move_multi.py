@@ -47,17 +47,22 @@ def main() -> None:
 
         print(f"[INFO] {'move'}: {target}")
         ctrl.move(MOTOR, target, backlash=False)
-        time.sleep(10)
-        # ctrl.wait_stop(MOTOR, timeout_sec=MOTION_TIMEOUT_SEC)
-        # if ctrl.get_position(MOTOR) != target:
-        #     raise AssertionError("ABS移動位置不一致")
+        status = ctrl.wait_for_complete(
+            MOTOR,
+            timeout_sec=MOTION_TIMEOUT_SEC,
+            target_position=target,
+        )
+        if status is None:
+            raise AssertionError("ABS移動が完了しませんでした")
+        if ctrl.get_position(MOTOR) != target:
+            raise AssertionError("ABS移動位置不一致")
 
         # ctrl.move(MOTOR, before, backlash=False)
         # ctrl.wait_stop(MOTOR, timeout_sec=MOTION_TIMEOUT_SEC)
         # print(f"[PASS] {'move'}: {'OK'}")
     finally:
         try:
-            ctrl.emergency_stop_all()
+            ctrl.stop(MOTOR)
         finally:
             ctrl.close()
 
