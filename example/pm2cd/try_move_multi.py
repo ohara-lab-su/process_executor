@@ -57,10 +57,10 @@ def main() -> None:
         if ctrl.get_position(MOTOR) != target:
             raise AssertionError("ABS移動位置不一致")
 
-        # ctrl.move(MOTOR, before, backlash=False)
-        # ctrl.wait_stop(MOTOR, timeout_sec=MOTION_TIMEOUT_SEC)
-        # print(f"[PASS] {'move'}: {'OK'}")
+        logger.info(f"[PASS] {'move'}: {'OK'}")
+
     finally:
+
         try:
             ctrl.stop(MOTOR)
         finally:
