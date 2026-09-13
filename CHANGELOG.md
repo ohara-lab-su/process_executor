@@ -1,22 +1,210 @@
 # CHANGELOG
 
-## 0.0.0
+## 0.0.0 - 2026-09-13
 
-- 初版。
-- `pyproject.toml` による src-layout package として構成。
-- 装置非依存の `ProcessExecutor` を追加。
-- 継承を使用せず、Controller からの委譲で利用する構成とした。
-- 汎用 worker process の事前起動を実装。
-- handler 専用 process を作らず、worker が任意 handler job を実行する構成とした。
-- job Queue を実装。
-- 非同期 `submit()` を実装。
-- `state()`, `job()`, `jobs()`, `result()`, `wait()` を実装。
-- worker state の参照を実装。
-- `multiprocessing.Manager()` による `jobs`, `workers`, `state` の共有を実装。
-- 全 worker から利用可能な単一の共有 `lock` を追加。
-- dead worker の確認と補充を実装。
-- `example/` に multiprocessing を知らない `DummyControl` を追加。
-- `example/` に `ProcessExecutor` を利用する `DummyCtrl` を追加。
-- `example/example.py` に実行可能なサンプルを追加。
-- pytest による実テストを追加。
-- 通信方式、装置 protocol、FastAPI、gRPC に依存しない構成とした。
+`process-executor` の初期版である。
+
+本バージョンでは、通常の Python クラス、特に既存の装置制御 Ctrl クラスを、multiprocessing のためだけに書き直さず worker process 上で実行するための汎用 execution layer を実装した。
+
+### ProcessExecutor
+
+`ProcessExecutor` を実装した。
+
+以下の機能を持つ。
+
+- 指定数の worker process を起動する。
+- worker process を job ごとに作り直さず再利用する。
+- handler 名、位置引数、キーワード引数を job として queue に投入する。
+- worker-local instance の public method を handler 名から取得して実行する。
+- job ID を生成する。
+- job state を `queued`、`running`、`succeeded`、`failed` として管理する。
+- job metadata を共有 mapping に保持する。
+- worker metadata を共有 mapping に保持する。
+- worker 内で発生した exception の type、message、traceback を job metadata に保持する。
+- `state()` を実装する。
+- `job()` を実装する。
+- `jobs()` を実装する。
+- `result()` による非待機の結果取得を実装する。
+- `wait()` による明示的な完了待機を実装する。
+- `worker()`、`workers()` による worker metadata 取得を実装する。
+- dead worker を検出し、設定した `worker_count` まで補充する。
+- `close()` により worker、Queue、Manager を終了する。
+- context manager protocol を実装する。
+
+終了 API は `close()` である。
+
+### worker_factory
+
+`worker_factory(context)` による worker-local instance 生成を実装した。
+
+factory には `SharedContext` を渡す。
+
+共有 state や共有 lock を worker instance の生成時に利用したい場合の I/F である。
+
+### worker_class
+
+既存クラスを worker 専用クラスへ書き直さず利用するため、`worker_class` を実装した。
+
+次の引数を利用できる。
+
+```python
+ProcessExecutor(
+    worker_class=ExistingCtrl,
+    worker_args=(...),
+    worker_kwargs={...},
+)
+```
+
+各 worker process 内で `ExistingCtrl(*worker_args, **worker_kwargs)` を生成する。
+
+`worker_class` の追加により、装置固有側に既存 Ctrl と同じ constructor / delegation を持つ worker class や factory を繰り返し実装する必要をなくした。
+
+`worker_factory` と `worker_class` は同時に指定できない。
+
+`worker_args` と `worker_kwargs` は `worker_class` 専用である。
+
+### SharedContext
+
+`SharedContext` を実装した。
+
+次の共有 object を保持する。
+
+- `jobs`
+- `workers`
+- `state`
+- `lock`
+
+`state` は利用側の共有状態用 mapping である。
+
+`lock` は process-safe な generic `RLock` であり、装置固有の意味は持たない。
+
+### worker model
+
+handler ごとの専用 worker process は作らず、generic worker が worker-local instance を一つ保持し、job ごとに異なる method を実行する構成とした。
+
+worker state として次を使用する。
+
+- `idle`
+- `running`
+- `stopped`
+- `dead`
+
+constructor では指定数の worker process を起動する。
+
+0.0.0 は constructor が全 worker の `idle` 登録完了まで待機する仕様ではない。worker process は起動後に worker-local instance を生成し、準備完了後に metadata を `idle` として登録する。
+
+### job model
+
+`submit()` は handler の終了を待たず job ID を返す。
+
+job state として次を使用する。
+
+- `queued`
+- `running`
+- `succeeded`
+- `failed`
+
+job metadata には次を保持する。
+
+- `job_id`
+- `handler`
+- `args`
+- `kwargs`
+- `state`
+- `worker_id`
+- `result`
+- `error`
+- `created_at`
+- `started_at`
+- `finished_at`
+
+### exception
+
+worker method 内の exception を job failure として捕捉する。
+
+error metadata に次を保存する。
+
+- exception type
+- message
+- traceback
+
+failed job に対する `result()` / `wait()` は `RuntimeError` とする。
+
+### logger
+
+`ProcessExecutor(..., logger=...)` を受け取る I/F を実装した。
+
+0.0.0 では logger は親 process 側に保持する。worker process への logger object の自動注入は行わない。
+
+process-safe rotating log aggregation は ProcessExecutor core の責務には含めない。
+
+### generic example
+
+以下を収録する。
+
+```text
+example/dummy_single.py
+example/dummy_ctrl.py
+example/example.py
+```
+
+`DummySingle` は multiprocessing を知らない通常の同期クラスである。
+
+`DummyCtrl` は `ProcessExecutor` を composition し、`worker_factory` を利用して `DummySingle` を worker process 上で実行する。
+
+`example.py` は二つの worker に `get` と `query` を job として投入し、state と result を確認する実行例である。
+
+### PM2CD example
+
+以下を収録する。
+
+```text
+example/pmcd/try_move.py
+example/pmcd/pm2cd_multi.py
+example/pmcd/try_move_multi.py
+```
+
+`try_move.py` は既存 `pm2cd.pm2cd_ctrl.PM2CD` を直接利用する single 側の実行例である。
+
+`pm2cd_multi.py` は既存 `pm2cd.pm2cd_ctrl.PM2CD` を `worker_class` として `ProcessExecutor` に渡す限定 multi facade である。
+
+PM2CD 専用 worker class、Communication、Device の再実装は行わない。
+
+`try_move_multi.py` は multi facade を利用する実機操作例である。
+
+PM2CD example は `worker_count=1` とする。0.0.0 は一つの Communication / TCP connection を複数 worker process で共有する broker を実装していないためである。
+
+### tests
+
+pytest test directory を `tests/` とした。
+
+`tests/test_process_executor.py` では、job model、parallel execution、SharedContext、例外、`close()`、`worker_class`、`worker_factory` の条件を検証する。
+
+`tests/test_example.py` では generic example を検証する。
+
+PM2CD example は実機依存であるため pytest から実機操作は行わない。
+
+### 設計上の決定
+
+- ProcessExecutor は装置 protocol を知らない。
+- ProcessExecutor は Ctrl の public API を規定しない。
+- multiprocessing のために既存 Ctrl を継承させない。
+- reusable architecture は composition / delegation で構成する。
+- handler と worker process を1対1に対応させない。
+- worker 専用 Ctrl のコピーを要求しない。
+- 通常の既存 Ctrl は `worker_class` で直接利用する。
+- `SharedContext` が必要な場合は `worker_factory` を利用する。
+- job submission と completion waiting を分離する。
+- generic process lock と装置固有の排他 semantics を分離する。
+- 外部 server、Web API、gRPC は ProcessExecutor の責務に含めない。
+- process-safe rotating log aggregation は ProcessExecutor の責務に含めない。
+
+### 既知の制約
+
+- worker ごとに独立した worker-local instance を生成する。
+- constructor は全 worker の初期化完了を待機しない。
+- 一つの TCP socket、serial port、device handle 等を複数 worker process から共有する broker 機能は持たない。
+- worker process へ logger object を自動配布しない。
+- worker 側 exception は元 exception class のまま親 process に再送出せず、error metadata を基に `RuntimeError` として通知する。
+- `Manager` と `Queue` を利用するため、超低 latency の shared-memory execution engine を目的とした実装ではない。
+- job の `succeeded` は Python handler が正常 return したことを表し、物理装置の動作完了を意味しない。

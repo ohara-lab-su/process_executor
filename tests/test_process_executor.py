@@ -1,4 +1,4 @@
-"""ProcessExecutor 本体を検証する pytest。"""
+"""ProcessExecutor 0.0.0 の pytest。"""
 
 import time
 from typing import Any
@@ -9,12 +9,8 @@ from process_executor import ProcessExecutor
 from process_executor import SharedContext
 
 
-class DummyWorker:
-    """pytest で使用する worker-local dummy class。
-
-    Args:
-        context: ProcessExecutor が管理する共有 context。
-    """
+class FactoryWorker:
+    """worker_factory 用の worker-local dummy class。"""
 
     def __init__(
         self,
@@ -27,31 +23,15 @@ class DummyWorker:
         left: int,
         right: int,
     ) -> int:
-        """2値を加算する。
-
-        Args:
-            left: 左辺。
-            right: 右辺。
-
-        Returns:
-            加算結果。
-        """
+        """2値を加算する。"""
         return left + right
 
     def sleep(
         self,
         delay_sec: float,
     ) -> float:
-        """指定時間だけ待機する。
-
-        Args:
-            delay_sec: 待機時間。
-
-        Returns:
-            指定された待機時間。
-        """
+        """指定時間だけ待機する。"""
         time.sleep(delay_sec)
-
         return delay_sec
 
     def set_shared(
@@ -59,63 +39,91 @@ class DummyWorker:
         key: str,
         value: Any,
     ) -> Any:
-        """共有 state を lock 下で更新する。
-
-        Args:
-            key: state key。
-            value: state value。
-
-        Returns:
-            設定した value。
-        """
+        """共有 state を lock 下で更新する。"""
         with self._context.lock:
             self._context.state[key] = value
 
         return value
 
     def fail(self) -> None:
-        """worker 内例外を発生させる。
-
-        Raises:
-            ValueError: 常に発生する pytest 用 error。
-        """
+        """worker 内例外を発生させる。"""
         raise ValueError("pytest failure")
 
 
-def create_dummy_worker(
+class ExistingCtrl:
+    """worker_class I/F の検証に使用する既存 class。"""
+
+    def __init__(
+        self,
+        base: int,
+        label: str = "ctrl",
+    ) -> None:
+        self._base = base
+        self._label = label
+
+    def add(
+        self,
+        value: int,
+    ) -> int:
+        """constructor 引数を利用して加算する。"""
+        return self._base + value
+
+    def label(self) -> str:
+        """constructor keyword argument を返す。"""
+        return self._label
+
+
+def create_factory_worker(
     context: SharedContext,
-) -> DummyWorker:
-    """pytest 用 DummyWorker を生成する。
-
-    Args:
-        context: ProcessExecutor が管理する共有 context。
-
-    Returns:
-        DummyWorker。
-    """
-    return DummyWorker(
+) -> FactoryWorker:
+    """FactoryWorker を生成する。"""
+    return FactoryWorker(
         context=context,
     )
 
 
+def wait_workers_ready(
+    executor: ProcessExecutor,
+    expected_count: int,
+    timeout_sec: float = 5.0,
+) -> None:
+    """worker metadata が登録されるまで待機する。"""
+    deadline = time.monotonic() + timeout_sec
+
+    while True:
+        workers = executor.workers()
+        ready_count = 0
+
+        for metadata in workers.values():
+            if metadata["state"] == "idle":
+                ready_count += 1
+
+        if ready_count >= expected_count:
+            return
+
+        if time.monotonic() >= deadline:
+            pytest.fail("workers were not ready")
+
+        time.sleep(0.01)
+
+
 @pytest.fixture
 def executor() -> ProcessExecutor:
-    """各 test 用 ProcessExecutor を生成する。
-
-    Yields:
-        worker_count=2 の ProcessExecutor。
-    """
+    """worker_factory 版 ProcessExecutor を生成する。"""
     process_executor = ProcessExecutor(
-        worker_factory=create_dummy_worker,
+        worker_factory=create_factory_worker,
         worker_count=2,
         start_method="spawn",
-        log_level="WARNING",
-        logger_name="pytest.ProcessExecutor",
+    )
+
+    wait_workers_ready(
+        process_executor,
+        expected_count=2,
     )
 
     yield process_executor
 
-    process_executor.shutdown()
+    process_executor.close()
 
 
 def test_submit_is_nonblocking(
@@ -265,24 +273,12 @@ def test_worker_count_is_started(
     executor: ProcessExecutor,
 ) -> None:
     """設定数の worker が起動されることを検証する。"""
-    deadline = time.monotonic() + 2.0
+    workers = executor.workers()
     active_workers = []
 
-    while True:
-        worker_metadata = executor.workers()
-        active_workers = []
-
-        for metadata in worker_metadata.values():
-            if metadata["state"] != "dead":
-                active_workers.append(metadata)
-
-        if len(active_workers) >= 2:
-            break
-
-        if time.monotonic() >= deadline:
-            pytest.fail("workers were not started")
-
-        time.sleep(0.01)
+    for metadata in workers.values():
+        if metadata["state"] != "dead":
+            active_workers.append(metadata)
 
     assert len(active_workers) >= 2
 
@@ -295,21 +291,87 @@ def test_unknown_job_returns_none(
     assert executor.job("unknown") is None
 
 
-def test_submit_after_shutdown_is_rejected() -> None:
-    """shutdown 後に新しい job を投入できないことを検証する。"""
+def test_submit_after_close_is_rejected() -> None:
+    """close() 後に新しい job を投入できないことを検証する。"""
     process_executor = ProcessExecutor(
-        worker_factory=create_dummy_worker,
+        worker_factory=create_factory_worker,
         worker_count=1,
         start_method="spawn",
-        log_level="WARNING",
-        logger_name="pytest.shutdown",
     )
 
-    process_executor.shutdown()
+    process_executor.close()
 
     with pytest.raises(RuntimeError):
         process_executor.submit(
             "add",
             1,
             2,
+        )
+
+
+def test_worker_class_instantiates_existing_class() -> None:
+    """既存 class を worker_class として直接生成できることを検証する。"""
+    process_executor = ProcessExecutor(
+        worker_class=ExistingCtrl,
+        worker_args=(10,),
+        worker_kwargs={
+            "label": "existing",
+        },
+        worker_count=1,
+        start_method="spawn",
+    )
+
+    try:
+        wait_workers_ready(
+            process_executor,
+            expected_count=1,
+        )
+
+        add_job_id = process_executor.submit(
+            "add",
+            5,
+        )
+        label_job_id = process_executor.submit("label")
+
+        assert process_executor.wait(
+            add_job_id,
+            timeout_sec=2.0,
+        ) == 15
+        assert process_executor.wait(
+            label_job_id,
+            timeout_sec=2.0,
+        ) == "existing"
+    finally:
+        process_executor.close()
+
+
+def test_worker_factory_and_worker_class_are_exclusive() -> None:
+    """worker_factory と worker_class の同時指定を拒否することを検証する。"""
+    with pytest.raises(ValueError):
+        ProcessExecutor(
+            worker_factory=create_factory_worker,
+            worker_class=ExistingCtrl,
+            worker_count=1,
+        )
+
+
+def test_worker_args_require_worker_class() -> None:
+    """worker_args が worker_class 専用であることを検証する。"""
+    with pytest.raises(ValueError):
+        ProcessExecutor(
+            worker_factory=create_factory_worker,
+            worker_args=(1,),
+            worker_count=1,
+        )
+
+
+def test_worker_kwargs_require_worker_class() -> None:
+    """worker_kwargs が worker_class 専用であることを検証する。"""
+    with pytest.raises(ValueError):
+        ProcessExecutor(
+            worker_factory=create_factory_worker,
+            worker_kwargs={
+                "base": 1,
+            },
+            worker_count=1,
         )
