@@ -20,7 +20,7 @@
 - job state を `queued`、`running`、`succeeded`、`failed` として管理する。
 - job metadata を共有 mapping に保持する。
 - worker metadata を共有 mapping に保持する。
-- worker 内で発生した exception の type、message、traceback を job metadata に保持する。
+- worker-local handler 内で発生した `Exception` の type、message、traceback を job metadata に保持する。
 - `state()` を実装する。
 - `job()` を実装する。
 - `jobs()` を実装する。
@@ -120,7 +120,7 @@ job metadata には次を保持する。
 
 ### exception
 
-worker method 内の exception を job failure として捕捉する。
+worker-local instance の handler 実行中に発生した `Exception` を job failure として捕捉する。
 
 error metadata に次を保存する。
 
@@ -205,6 +205,11 @@ PM2CD example は実機依存であるため pytest から実機操作は行わ�
 - constructor は全 worker の初期化完了を待機しない。
 - 一つの TCP socket、serial port、device handle 等を複数 worker process から共有する broker 機能は持たない。
 - worker process へ logger object を自動配布しない。
-- worker 側 exception は元 exception class のまま親 process に再送出せず、error metadata を基に `RuntimeError` として通知する。
+- worker-local handler 内の `Exception` は元 exception class のまま親 process に再送出せず、error metadata を基に `RuntimeError` として通知する。
+- worker-local instance の constructor / factory 生成失敗を job failure として親 process に通知する機構は持たない。
+- worker process が handler 実行中に process-level で終了した場合、その job を自動的に `failed` へ変更する機構は持たない。
+- `wait()` を timeout なしで使用した場合、process-level failure では待機が継続する可能性がある。
+- `close()` の worker `join()` には timeout がない。
+- worker process は daemon process である。
 - `Manager` と `Queue` を利用するため、超低 latency の shared-memory execution engine を目的とした実装ではない。
 - job の `succeeded` は Python handler が正常 return したことを表し、物理装置の動作完了を意味しない。

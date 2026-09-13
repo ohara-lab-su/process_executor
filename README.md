@@ -385,7 +385,7 @@ ProcessExecutor が管理する worker metadata の共有 mapping である。
 
 ## 11. 例外処理
 
-worker method 内で例外が発生すると job は `failed` になる。
+worker-local instance の handler 実行中に `Exception` が発生すると job は `failed` になる。
 
 error metadata には次を保存する。
 
@@ -396,6 +396,10 @@ error metadata には次を保存する。
 failed job に対して `result()` または `wait()` を呼ぶと `RuntimeError` を送出する。
 
 0.0.0 では、worker 側で発生した元 exception class を親 process 側で再構築して再送出する仕様にはしていない。
+
+なお、この exception handling の対象は handler 実行部分である。`worker_factory(context)` または `worker_class(...)` による worker-local instance の生成時に例外が発生した場合、その例外を job failure として親 process に通知する機構は 0.0.0 にはない。instance 生成に失敗した worker process は終了する。
+
+また、handler 実行中に process 自体が強制終了するなど、Python の通常の `Exception` handling を通らず worker が消滅した場合、その時点で `running` であった job を自動的に `failed` へ変更する機構も 0.0.0 にはない。そのため、このような job に対して timeout を指定せず `wait()` すると待機が継続する可能性がある。
 
 ---
 
@@ -408,6 +412,10 @@ constructor では指定数の worker process を起動する。
 job は worker の準備前でも queue に投入でき、worker が利用可能になった時点で処理される。
 
 `close()` は生存 worker に stop sentinel を投入し、worker を `join()` した後、Queue と Manager を終了する。
+
+0.0.0 の `join()` には timeout を指定していない。そのため、worker が戻らない handler を実行中である場合、`close()` も worker 終了まで待機し続ける可能性がある。
+
+worker process は `daemon=True` で起動する。したがって、worker-local handler からさらに multiprocessing child process を生成する用途を前提にはしていない。
 
 `close()` は複数回呼んでも二回目以降は何もしない。
 
@@ -715,7 +723,7 @@ pytest
 - 複数 worker が独立 job を並列実行すること。
 - `SharedContext.state` と `lock` が worker から利用できること。
 - `result()` が暗黙に待機しないこと。
-- worker 内 exception が failed job になること。
+- worker-local handler 内の `Exception` が failed job になること。
 - 引数と戻り値が process 境界を越えること。
 - worker 数が維持されること。
 - `close()` 後の `submit()` が拒否されること。
