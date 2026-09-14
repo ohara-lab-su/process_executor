@@ -1,5 +1,183 @@
 # CHANGELOG
 
+# process-executor v0.1.1
+
+v0.1.1 では、PM2CD example の multi 構成を見直し、複数 worker process を使用しながら、物理装置との通信を1本に集約できる構成へ変更した。
+
+`ProcessExecutor` core の基本 API は変更していない。v0.1.0 で導入した `worker_factory`、`worker_class`、`SharedContext` を利用し、PM2CD 側の example を再構成したバージョンである。
+
+## PM2CD multi
+
+`example/pm2cd/multi/` を、複数 worker process を使用する基本 multi sample として更新した。
+
+構成は以下の通りである。
+
+```text
+example/pm2cd/
+├── multi/
+│   ├── client_sync.py
+│   ├── pm2cd_multi.py
+│   └── server.py
+├── try_move_multi_client.py
+└── try_move_multi_local.py
+```
+
+従来の PM2CD multi example では、worker ごとに `PM2CDsingle` を生成すると、それぞれが独立した `Communication` と TCP connection を持つため、同一装置に対して複数の通信経路が生成される問題があった。
+
+v0.1.1 の `multi` では、`Communication` を manager process 側で1インスタンスだけ生成し、各 worker process の `PM2CDsingle` へ同じ Communication proxy を渡す構成へ変更した。
+
+```text
+PM2CDsingle worker 1 ─┐
+PM2CDsingle worker 2 ─┼─> Communication proxy
+PM2CDsingle worker 3 ─┘
+                           |
+                           v
+                    Communication
+                           |
+                           v
+                      TCP connection
+                           |
+                           v
+                         PM2CD
+```
+
+これにより、
+
+- `ProcessExecutor` 側では複数 worker process を利用する。
+- PM2CD の controller logic は各 worker の既存 `PM2CDsingle` をそのまま利用する。
+- 物理通信は1個の `Communication` に集約する。
+- PM2CD 専用の worker class を新たに作成しない。
+
+という構成とした。
+
+worker 数は `PM2CD(..., worker_count=...)` で指定する。
+
+example では `WORKER_COUNT` をコード側の設定値として使用する。コマンドラインオプションによる worker 数指定は行わない。
+
+## PM2CD multi_shared
+
+`example/pm2cd/multi_shared/` を追加した。
+
+構成は以下の通りである。
+
+```text
+example/pm2cd/
+├── multi_shared/
+│   ├── client_sync.py
+│   ├── pm2cd_multi.py
+│   └── server.py
+├── try_move_multi_shared_client.py
+└── try_move_multi_shared_local.py
+```
+
+`multi_shared` は、`multi` の通信構成に加えて、worker process 間で controller の移動コンテキストを共有する sample である。
+
+PM2CD の `move()` / `move_relative()` と `wait_for_complete()` は、直前の位置決め条件として以下の情報を利用する。
+
+- target position
+- backlash 指定
+- backlash 有効状態
+- backlash value
+
+worker ごとに独立した `PM2CDsingle` を持つだけでは、`move()` を実行した worker と `wait_for_complete()` を実行した worker が異なる場合、この移動コンテキストを引き継げない。
+
+v0.1.1 の `multi_shared` では、`worker_factory(context)` を使用して `PM2CDsingle` を生成し、`SharedContext.state` を `PM2CDsingle` の移動コンテキストとして利用する。
+
+```text
+                    SharedContext.state
+                           ^
+                           |
+          +----------------+----------------+
+          |                |                |
+     worker 1         worker 2         worker 3
+    PM2CDsingle      PM2CDsingle      PM2CDsingle
+          \                |               /
+           \               |              /
+            +------ Communication proxy ---+
+                           |
+                           v
+                    Communication
+                           |
+                           v
+                         PM2CD
+```
+
+これにより、異なる worker process 間でも、
+
+```text
+move()
+  |
+  v
+shared move context
+  |
+  v
+wait_for_complete()
+```
+
+という状態引き継ぎが可能になった。
+
+共有機構は multi class 内部で処理するため、呼び出し側に shared 専用 API は追加していない。
+
+## multi と multi_shared の違い
+
+`multi` は、複数 worker と単一 Communication による基本構成を示す。
+
+controller 固有の状態共有は行わないため、worker-local な状態に依存しない呼び出し方法を使用する。
+
+`multi_shared` は、単一 Communication に加えて `SharedContext` を利用し、PM2CD の移動コンテキストも worker 間で共有する。
+
+そのため、`move()` と `wait_for_complete()` が別 worker で実行された場合でも、位置決め条件を引き継ぐことができる。
+
+## 旧 example
+
+v0.1.1 で置き換えた旧 multi example は、
+
+```text
+example/pm2cd/x1_multi/
+```
+
+へ移動した。
+
+`x1_multi` は旧構成の保存用であり、v0.1.1 の PM2CD multi example は、
+
+```text
+example/pm2cd/multi/
+example/pm2cd/multi_shared/
+```
+
+を使用する。
+
+## v0.1.1 の位置づけ
+
+v0.1.1 での主な変更は PM2CD example の multi-process 構成の更新である。
+
+`ProcessExecutor` 自体は装置 protocol や PM2CD 固有の通信仕様を持たない。
+
+物理通信の共有は PM2CD example 側で `Communication` を1個に集約し、controller 固有状態の共有が必要な場合のみ `SharedContext` を利用する。
+
+この構成により、
+
+```text
+ProcessExecutor
+    |
+    +-- generic worker execution
+    +-- SharedContext
+
+PM2CD multi
+    |
+    +-- PM2CDsingle worker × N
+    +-- Communication × 1
+
+PM2CD multi_shared
+    |
+    +-- PM2CDsingle worker × N
+    +-- Communication × 1
+    +-- shared move context
+```
+
+という責務分離を維持したまま、PM2CD を複数 worker process で扱える sample とした。
+
+
 ## v0.1.0
 
 ### Shared Context
