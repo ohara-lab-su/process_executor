@@ -1,6 +1,7 @@
 """既存 PM2CD Ctrl を ProcessExecutor で実行する最小 multi 版。"""
 
 import time
+from dataclasses import fields
 from typing import Any, Optional, Union
 
 from pm2cd.core.motor_status import MotorStatus
@@ -68,6 +69,21 @@ class PM2CD:
 
         return self._executor.wait(job_id)
 
+    def _to_motor_status(
+        self,
+        status: Any,
+    ) -> Optional[MotorStatus]:
+        """worker の戻り値を公開用 MotorStatus に変換する。"""
+        if status is None:
+            return None
+
+        values = {
+            field.name: getattr(status, field.name)
+            for field in fields(MotorStatus)
+        }
+
+        return MotorStatus(**values)
+
     def _backlash_enabled(
         self,
         backlash: Union[str, bool, None],
@@ -123,10 +139,12 @@ class PM2CD:
         motor: int,
     ) -> Optional[MotorStatus]:
         """指定モーターの状態を取得する。"""
-        return self._execute(
+        status = self._execute(
             "get_status",
             motor,
         )
+
+        return self._to_motor_status(status)
 
     def get_position(
         self,

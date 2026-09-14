@@ -26,9 +26,9 @@ def main() -> None:
 
         if status is None:
             raise AssertionError("STS?応答を取得できません")
-        if status["remote_local"] != "R":
-            raise AssertionError(f"REMOTEへ移行していません: {status['raw']!r}")
-        if status["is_busy"]:
+        if status.remote_local != "R":
+            raise AssertionError(f"REMOTEへ移行していません: {status.raw!r}")
+        if status.is_busy:
             raise AssertionError(f"motor {MOTOR} が停止していません")
 
         before = ctrl.get_position(MOTOR)
