@@ -1,6 +1,28 @@
 # CHANGELOG
 
-# CHANGELOG
+## v0.1.0
+
+### Shared Context
+
+- `ProcessExecutor` の `SharedContext` を利用した handler 間のデータ共有に対応。
+- `ProcessExecutor.shared_context` を通して、複数 handler から共通の `state` を参照できる構成を追加。
+- 既存の single class を `worker_class` として使用する構造は維持し、共有処理は multi 側で管理する構成とした。
+- 共有機能を利用する場合も、single class の公開 API および multi class の基本構造を変更せずに利用可能。
+
+### Example
+
+- `example/pm2cd/multi_share/` を追加。
+- PM2CD を用いて `SharedContext` による handler 間のデータ共有を確認するサンプルを追加。
+- `move()` で設定した target position を共有状態へ保存し、後続の `wait_for_complete()` が共有状態から取得する構成とした。
+- 共有処理は multi class 内部で行い、呼び出し側から共有機構を意識するための専用 API は不要。
+- `multi_share` 用に以下の構成を追加。
+  - `example/pm2cd/multi_share/pm2cd_multi.py`
+  - `example/pm2cd/multi_share/server.py`
+  - `example/pm2cd/multi_share/client_sync.py`
+  - `example/pm2cd/try_move_multi_share_local.py`
+  - `example/pm2cd/try_move_multi_share_client.py`
+- local および FastAPI server/client の双方で `multi_share` を確認できるテスト構成とした。
+
 
 ## v0.0.1
 
