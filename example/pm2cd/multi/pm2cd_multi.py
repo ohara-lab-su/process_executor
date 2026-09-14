@@ -1,17 +1,38 @@
 #!/usr/bin/env python
 # coding: utf-8
-"""PM2CDsingle を ProcessExecutor で実行する local multi 版。"""
+"""PM2CDsingle を ProcessExecutor で実行する基本 multi sample。"""
 
+from multiprocessing.managers import BaseManager
 from typing import Any, Optional, Union
 
+from pm2cd.core.communication_tcp import Communication
 from pm2cd.core.motor_status import MotorStatus
 from pm2cd.pm2cd_single import PM2CDsingle
 from process_executor import ProcessExecutor
 from x_logger import XLogger
 
 
+class _CommunicationManager(BaseManager):
+    """単一の Communication を所有する manager。"""
+
+
+_CommunicationManager.register(
+    "Communication",
+    Communication,
+    exposed=(
+        "is_connected",
+        "connect",
+        "disconnect",
+        "send",
+        "receive",
+        "query",
+        "close",
+    ),
+)
+
+
 class PM2CD:
-    """PM2CDsingle を worker process 内で実行する local multi I/F。"""
+    """PM2CDsingle を複数 worker process で実行する基本 multi sample。"""
 
     def __init__(
         self,
@@ -19,6 +40,7 @@ class PM2CD:
         port: int = 7777,
         timeout_sec: float = 3.0,
         channel_count: int = 2,
+        worker_count: int = 2,
         logger: Any = None,
         log_level: str = "INFO",
     ) -> None:
@@ -34,6 +56,16 @@ class PM2CD:
         if hasattr(logger, "get_log_level"):
             worker_log_level = logger.get_log_level()
 
+        self._communication_manager = _CommunicationManager()
+        self._communication_manager.start()
+
+        self._communication = self._communication_manager.Communication(
+            ip_address=ip_address,
+            port=port,
+            timeout_sec=timeout_sec,
+            log_level=worker_log_level,
+        )
+
         self._executor = ProcessExecutor(
             worker_class=PM2CDsingle,
             worker_kwargs={
@@ -41,9 +73,10 @@ class PM2CD:
                 "port": port,
                 "timeout_sec": timeout_sec,
                 "channel_count": channel_count,
+                "communication": self._communication,
                 "log_level": worker_log_level,
             },
-            worker_count=1,
+            worker_count=worker_count,
             start_method="spawn",
             logger=self._logger,
         )
@@ -54,7 +87,7 @@ class PM2CD:
         *args: Any,
         **kwargs: Any,
     ) -> Any:
-        """PM2CDsingle の public method を worker process で実行する。"""
+        """PM2CDsingle の method を worker process で実行する。"""
         job_id = self._executor.submit(
             method,
             *args,
@@ -115,7 +148,7 @@ class PM2CD:
         interval_sec: float = 0.1,
         target_position: Optional[int] = None,
     ) -> Optional[MotorStatus]:
-        """worker process 内で移動完了を待つ。"""
+        """指定位置への移動完了を待つ。"""
         return self._execute(
             "wait_for_complete",
             motor,
@@ -125,11 +158,13 @@ class PM2CD:
         )
 
     def close(self) -> bool:
-        """worker 側 PM2CDsingle と ProcessExecutor を終了する。"""
-        result = False
+        """worker と共有 Communication を終了する。"""
         try:
-            result = self._execute("close")
-        finally:
             self._executor.close()
+        finally:
+            try:
+                result = self._communication.close()
+            finally:
+                self._communication_manager.shutdown()
 
         return result

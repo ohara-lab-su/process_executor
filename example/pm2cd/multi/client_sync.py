@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # coding: utf-8
-"""PM2CD local multi 用の同期 FastAPI クライアント。"""
+"""PM2CD 基本 multi 用の同期 FastAPI クライアント。"""
 
 from typing import Any, Optional
 
