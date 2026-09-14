@@ -2,9 +2,9 @@
 
 `process-executor` は、通常の Python クラスを multiprocessing の worker process 上で実行するための汎用実行基盤である。特に、すでに単体で完成している装置制御用 Ctrl クラスを、multiprocessing のためだけに書き直さず利用することを主目的としている。
 
-現在のバージョンは **0.0.0** である。
+現在のバージョンは **0.1.1** である。
 
-本 README は導入手順だけではなく、0.0.0 の設計理由、責務分離、内部構造、public API、制約、および実際の example をまとめた仕様書兼チュートリアルである。
+本 README は導入手順だけではなく、現在の設計理由、責務分離、内部構造、public API、制約、および実際の example をまとめた仕様書兼チュートリアルである。
 
 ---
 
@@ -51,7 +51,7 @@ class MotorCtrl:
 
 ## 2. 設計の中心
 
-0.0.0 の中心的な方針は次である。
+現在の実装の中心的な方針は次である。
 
 > Ctrl を multiprocessing 用に作り直すのではなく、既存 Ctrl を worker process 内で生成し、その public method を job として実行する。
 
@@ -125,7 +125,7 @@ ExistingWorkerFactory
 
 という専用クラス群を作ると、既存 Ctrl とほぼ同じ constructor や delegation を繰り返すことになる。
 
-0.0.0 では、この重複を避けるため `worker_class` I/F を持つ。
+現在の実装では、この重複を避けるため `worker_class` I/F を持つ。
 
 ```python
 executor = ProcessExecutor(
@@ -198,7 +198,7 @@ handler の種類と worker の寿命を分離する設計である。
 
 ## 6. worker instance の生成方法
 
-0.0.0 には二つの生成方法がある。
+worker-local instance には二つの生成方法がある。
 
 ### 6.1 `worker_class`
 
@@ -375,6 +375,13 @@ ProcessExecutor が管理する worker metadata の共有 mapping である。
 
 利用側が必要に応じて使用する共有 mapping である。
 
+親 process 側からは `ProcessExecutor.shared_context` を通して同じ `SharedContext` を取得できる。
+
+```python
+context = executor.shared_context
+context.state["key"] = value
+```
+
 ### `lock`
 
 `multiprocessing.Manager().RLock()` により生成する process-safe lock である。
@@ -395,11 +402,11 @@ error metadata には次を保存する。
 
 failed job に対して `result()` または `wait()` を呼ぶと `RuntimeError` を送出する。
 
-0.0.0 では、worker 側で発生した元 exception class を親 process 側で再構築して再送出する仕様にはしていない。
+現在の実装では、worker 側で発生した元 exception class を親 process 側で再構築して再送出する仕様にはしていない。
 
-なお、この exception handling の対象は handler 実行部分である。`worker_factory(context)` または `worker_class(...)` による worker-local instance の生成時に例外が発生した場合、その例外を job failure として親 process に通知する機構は 0.0.0 にはない。instance 生成に失敗した worker process は終了する。
+なお、この exception handling の対象は handler 実行部分である。`worker_factory(context)` または `worker_class(...)` による worker-local instance の生成時に例外が発生した場合、その例外を job failure として親 process に通知する機構は現在の実装にはない。instance 生成に失敗した worker process は終了する。
 
-また、handler 実行中に process 自体が強制終了するなど、Python の通常の `Exception` handling を通らず worker が消滅した場合、その時点で `running` であった job を自動的に `failed` へ変更する機構も 0.0.0 にはない。そのため、このような job に対して timeout を指定せず `wait()` すると待機が継続する可能性がある。
+また、handler 実行中に process 自体が強制終了するなど、Python の通常の `Exception` handling を通らず worker が消滅した場合、その時点で `running` であった job を自動的に `failed` へ変更する機構も現在の実装にはない。そのため、このような job に対して timeout を指定せず `wait()` すると待機が継続する可能性がある。
 
 ---
 
@@ -407,13 +414,13 @@ failed job に対して `result()` または `wait()` を呼ぶと `RuntimeError
 
 constructor では指定数の worker process を起動する。
 
-現在の 0.0.0 は、constructor が各 worker の `idle` 登録完了まで待機する仕様ではない。worker process は起動後に worker-local instance を生成し、その後 `idle` として metadata を登録する。
+現在の実装は、constructor が各 worker の `idle` 登録完了まで待機する仕様ではない。worker process は起動後に worker-local instance を生成し、その後 `idle` として metadata を登録する。
 
 job は worker の準備前でも queue に投入でき、worker が利用可能になった時点で処理される。
 
 `close()` は生存 worker に stop sentinel を投入し、worker を `join()` した後、Queue と Manager を終了する。
 
-0.0.0 の `join()` には timeout を指定していない。そのため、worker が戻らない handler を実行中である場合、`close()` も worker 終了まで待機し続ける可能性がある。
+現在の `join()` には timeout を指定していない。そのため、worker が戻らない handler を実行中である場合、`close()` も worker 終了まで待機し続ける可能性がある。
 
 worker process は `daemon=True` で起動する。したがって、worker-local handler からさらに multiprocessing child process を生成する用途を前提にはしていない。
 
@@ -443,13 +450,15 @@ executor = ProcessExecutor(
 )
 ```
 
-0.0.0 では logger を親 process 側に保持するのみであり、ProcessExecutor core から worker process へ自動注入しない。
+現在の実装では logger を親 process 側に保持するのみであり、ProcessExecutor core から worker process へ自動注入しない。
 
-複数 process から同じ rotating log file を直接扱う logging aggregation は 0.0.0 の責務には含めていない。
+複数 process から同じ rotating log file を直接扱う logging aggregation は ProcessExecutor core の責務には含めていない。
 
 ---
 
 ## 14. directory 構成
+
+source と example の主要構成は次である。`build/`、`*.egg-info`、`__pycache__/` は生成物なので省略する。
 
 ```text
 process-executor/
@@ -468,15 +477,32 @@ process-executor/
    |- dummy_single.py
    |- dummy_ctrl.py
    |- example.py
-   `- pmcd/
-      |- try_move.py
-      |- pm2cd_multi.py
-      `- try_move_multi.py
+   `- pm2cd/
+      |- single/
+      |  |- client_sync.py
+      |  `- server.py
+      |- multi/
+      |  |- client_sync.py
+      |  |- pm2cd_multi.py
+      |  `- server.py
+      |- multi_shared/
+      |  |- client_sync.py
+      |  |- pm2cd_multi.py
+      |  `- server.py
+      |- try_move_single_local.py
+      |- try_move_single_client.py
+      |- try_move_multi_local.py
+      |- try_move_multi_client.py
+      |- try_move_multi_shared_local.py
+      |- try_move_multi_shared_client.py
+      `- x1_multi/
 ```
 
 `tests/` は pytest の test suite である。
 
 `example/` は install package ではない。直接実行する sample / tutorial 用 directory である。
+
+`example/pm2cd/x1_multi/` は v0.1.1 で置き換えた旧 PM2CD multi example の保存用 directory である。現在の example は `multi/` と `multi_shared/` を使用する。
 
 ---
 
@@ -550,91 +576,151 @@ python example.py
 
 ## 16. example 2: 既存の制御クラスを multi 化する
 
-PM2CD の example は次である。
+PM2CD example は、single、基本 multi、shared multi を段階的に確認できる構成にしている。
 
 ```text
-example/pmcd/try_move.py
-example/pmcd/pm2cd_multi.py
-example/pmcd/try_move_multi.py
+example/pm2cd/
+|- single/
+|  |- client_sync.py
+|  `- server.py
+|- multi/
+|  |- client_sync.py
+|  |- pm2cd_multi.py
+|  `- server.py
+|- multi_shared/
+|  |- client_sync.py
+|  |- pm2cd_multi.py
+|  `- server.py
+|- try_move_single_local.py
+|- try_move_single_client.py
+|- try_move_multi_local.py
+|- try_move_multi_client.py
+|- try_move_multi_shared_local.py
+`- try_move_multi_shared_client.py
 ```
 
-### 16.1 `try_move.py`
+### 16.1 single
 
-single 側の基準となる実行例である。
+`try_move_single_local.py` は既存の PM2CD single class を直接使用する基準実行例である。
 
-```python
-from pm2cd.pm2cd_ctrl import PM2CD
+`single/server.py` と `single/client_sync.py` は、同じ single class を FastAPI server/client 経由で確認する example である。
+
+single class 自体を `process-executor` 用に書き換えることはしない。
+
+### 16.2 `multi`
+
+`multi/pm2cd_multi.py` は、複数 worker process を使用する基本 multi example である。
+
+各 worker process では既存 `PM2CDsingle` を生成する。ただし、各 worker が独立した TCP connection を所有しないように、物理通信は manager process 側の一つの `Communication` に集約する。
+
+概念的な構造は次である。
+
+```text
+PM2CDsingle worker 1 --+
+PM2CDsingle worker 2 --+--> Communication proxy
+PM2CDsingle worker N --+          |
+                                  v
+                           Communication x 1
+                                  |
+                                  v
+                           TCP connection x 1
+                                  |
+                                  v
+                                PM2CD
 ```
 
-既存 PM2CD Ctrl を直接使用する。
+`Communication` は `PM2CDsingle(..., communication=...)` の injection point を利用して各 worker に同じ proxy を渡す。
 
-### 16.2 `pm2cd_multi.py`
+したがって、worker process は複数でも、PM2CD との物理通信経路は一つである。
 
-multi 側では PM2CD protocol、Communication、Device を再実装しない。
+PM2CD 専用の worker class を別に作成しない。controller logic は既存 `PM2CDsingle` を利用する。
 
-既存 Ctrl class を読み込む。
+worker 数は multi facade の constructor の `worker_count` で指定する。
 
-```python
-from pm2cd.pm2cd_ctrl import PM2CD as PM2CDsingle
+example script ではコマンドラインオプションを使わず、コード内の `WORKER_COUNT` を設定値として渡す。
+
+基本 `multi` では controller-local な移動コンテキストは共有しない。そのため、sample の `wait_for_complete()` は worker-local state に依存しないよう、`backlash=False` と明示した移動に対して `target_position` を明示して確認する。
+
+### 16.3 `multi_shared`
+
+`multi_shared/pm2cd_multi.py` は、`multi` の単一 Communication 構成に加えて、worker process 間で PM2CD の移動コンテキストを共有する example である。
+
+`ProcessExecutor` の `worker_factory(context)` を使用して既存 `PM2CDsingle` を生成し、worker に渡された `SharedContext.state` を `PM2CDsingle` の `_move_context` として利用する。
+
+```text
+                 SharedContext.state
+                         ^
+                         |
+        +----------------+----------------+
+        |                |                |
+   PM2CDsingle      PM2CDsingle      PM2CDsingle
+    worker 1         worker 2         worker N
+        \                |                /
+         +------ Communication proxy -----+
+                         |
+                         v
+                  Communication x 1
+                         |
+                         v
+                       PM2CD
 ```
 
-その class 自体を `ProcessExecutor` に渡す。
+PM2CD の移動コンテキストには、`target_position`、backlash の有効状態、backlash value など、`move()` / `move_relative()` から `wait_for_complete()` へ引き継ぐ情報が保存される。
 
-```python
-self._executor = ProcessExecutor(
-    worker_class=PM2CDsingle,
-    worker_kwargs={
-        "ip_address": ip_address,
-        "port": port,
-        "timeout_sec": timeout_sec,
-        "channel_count": channel_count,
-        "log_level": worker_log_level,
-    },
-    worker_count=1,
-    start_method="spawn",
-    logger=self._logger,
-)
+これを共有することで、`move()` を実行した worker と `wait_for_complete()` を実行する worker が異なっても、同じ移動コンテキストを利用できる。
+
+共有機構は multi facade 内部の実装であり、呼び出し側に shared 専用 API を追加しない。
+
+### 16.4 local と FastAPI server/client
+
+各構成は local と FastAPI server/client の両方で確認できる。
+
+```text
+single
+  try_move_single_local.py
+  try_move_single_client.py
+
+multi
+  try_move_multi_local.py
+  try_move_multi_client.py
+
+multi_shared
+  try_move_multi_shared_local.py
+  try_move_multi_shared_client.py
 ```
 
-この構造では PM2CD 専用 worker class や PM2CD 専用 factory を作らない。
+multi facade の `_execute()` は内部で `submit()` と `wait()` を組み合わせるため、これら PM2CD example の public API は同期的に見える。
 
-worker process 内で生成されるのは既存 `pm2cd.pm2cd_ctrl.PM2CD` そのものである。
-
-### 16.3 `try_move_multi.py`
-
-multi facade の利用例である。
-
-```python
-from pm2cd_multi import PM2CD
-```
-
-外側の呼び出し形は single 側に近い。
-
-`pm2cd_multi.py` の `_execute()` は内部で `submit()` と `wait()` を組み合わせているため、この限定 example の public API は同期的に見える。
-
-これは `ProcessExecutor` 自体が同期 API を強制しているのではなく、multi facade 側の設計である。
+これは `ProcessExecutor` 自体が同期 API を強制しているのではなく、PM2CD multi facade 側の設計である。
 
 ---
 
-## 17. PM2CD example が worker_count=1 である理由
+## 17. PM2CD で複数 worker を使用する構成
 
 `ProcessExecutor` は worker ごとに worker-local instance を一つ生成する。
 
-したがって、
+したがって `worker_count=N` なら、PM2CD example では `PM2CDsingle` も N 個生成される。
 
-```python
-worker_count=4
+ただし v0.1.1 の PM2CD `multi` / `multi_shared` では、`PM2CDsingle` が使用する `Communication` を各 worker 内で個別生成しない。
+
+manager process 側で一つだけ生成した `Communication` の proxy を、すべての `PM2CDsingle` に injection する。
+
+この設計により、
+
+```text
+controller instance: N
+worker process:      N
+Communication:       1
+TCP connection:      1
 ```
 
-なら原則として Ctrl instance も4個生成される。
+という構成にできる。
 
-既存 PM2CD Ctrl は constructor 内で実 TCP connection を所有するため、worker 数を増やせば複数 Ctrl / 複数 connection となる。
+重要なのは、この Communication 集約機能が `ProcessExecutor` core に組み込まれたわけではない点である。
 
-0.0.0 は、一つの TCP socket / Communication object を複数 worker process から共有する broker ではない。
+`ProcessExecutor` は引き続き装置 protocol や TCP connection を知らない。PM2CD example 側が、PM2CD の dependency injection point と `BaseManager` を利用して物理 resource の ownership を構成している。
 
-そのため現在の PM2CD example は `worker_count=1` としている。
-
-この example の目的は、既存 Ctrl を worker 専用に書き直さず worker process 内で実行できることを示す点にある。
+旧 example の `worker_count=1` 構成は `example/pm2cd/x1_multi/` に保存している。
 
 ---
 
@@ -676,17 +762,21 @@ result / wait
 
 ### 19.1 一つの物理 resource を複数 worker で共有する場合
 
-一つの TCP socket、serial port、USB handle 等を複数 worker process から共有する場合は、resource owner process と IPC proxy 等の追加設計が必要である。
+一つの TCP socket、serial port、USB handle 等を複数 worker process から利用する場合は、resource owner process と IPC proxy 等の装置側設計が必要である。
 
-0.0.0 はその broker 機能を持たない。
+`ProcessExecutor` core 自体はその broker 機能を持たない。
+
+v0.1.1 の PM2CD `multi` / `multi_shared` は、その具体例として、PM2CD example 側に manager-owned `Communication` を置き、同じ proxy を複数 worker の `PM2CDsingle` へ injection している。
 
 ### 19.2 thread のように同一 Python object を共有したい場合
 
 process は address space が別である。通常の object reference を thread と同じように共有する実行器ではない。
 
+共有が必要な controller state は、必要に応じて `SharedContext.state` と `SharedContext.lock` を利用する。
+
 ### 19.3 超低 latency の shared-memory parallelism が必要な場合
 
-0.0.0 は `multiprocessing.Manager` と `Queue` を利用する。高頻度数値計算向け shared-memory executor を目的にはしていない。
+現在の実装は `multiprocessing.Manager` と `Queue` を利用する。高頻度数値計算向け shared-memory executor を目的にはしていない。
 
 ---
 
@@ -744,7 +834,7 @@ repository root で次を実行する。
 pip install -e .
 ```
 
-`pyproject.toml` の version は 0.0.0 である。
+`pyproject.toml` の version は 0.1.1 である。
 
 Python は 3.10 以上を対象としている。
 
@@ -809,7 +899,7 @@ if __name__ == "__main__":
 
 ---
 
-## 24. 0.0.0 の責務境界
+## 24. 現在の責務境界
 
 ProcessExecutor が担当するものは次である。
 
@@ -833,8 +923,8 @@ ProcessExecutor が担当するものは次である。
 - 装置固有の排他規則
 - 物理装置の動作完了判定
 - 装置固有の error recovery
-- 単一 Communication を複数 worker で共有する broker
+- 単一 Communication を複数 worker で共有する装置固有 broker の実装
 - FastAPI / gRPC 等の外部 server
 - process-safe rotating log aggregation
 
-この責務境界を維持することが、0.0.0 の設計上の中心である。
+この責務境界を維持することが、現在の設計上の中心である。
