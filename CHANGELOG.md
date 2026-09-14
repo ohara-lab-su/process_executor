@@ -1,5 +1,39 @@
 # CHANGELOG
 
+# CHANGELOG
+
+## v0.0.1
+
+### Test / Example
+
+- `process_executor` の動作確認用テストコードおよび example を整理。
+- `example/pm2cd/` に、PM2CD を用いた実機テストを追加・整理。
+- PM2CD のテストを以下の4構成に分離。
+  - `try_move_single_local.py`
+    - single 構成でのローカル実行テスト。
+  - `try_move_single_client.py`
+    - single 構成での FastAPI server/client 経由の実行テスト。
+  - `try_move_multi_local.py`
+    - `process_executor` を使用した multi 構成でのローカル実行テスト。
+  - `try_move_multi_client.py`
+    - `process_executor` を使用した multi 構成での FastAPI server/client 経由の実行テスト。
+- FastAPI server/client 用コードを構成ごとに整理。
+  - `example/pm2cd/single/`
+    - `server.py`
+    - `client_sync.py`
+  - `example/pm2cd/multi/`
+    - `pm2cd_multi.py`
+    - `server.py`
+    - `client_sync.py`
+- single → single server/client → multi local → multi server/client の各段階を独立して確認できるテスト構成とした。
+
+### Dependency
+
+- PM2CD の server/client テストで dataclass を戻り値として扱うため、更新された `ese774_frame` が必要。
+- `ese774_frame` の FastAPI auto-dispatch における dataclass のシリアライズ／復元対応を前提とする。
+- このため、従来版の `ese774_frame` では PM2CD の `MotorStatus` などの dataclass を返す API のテストは実行できない。
+
+
 ## 0.0.0 - 2026-09-13
 
 `process-executor` の初期版である。

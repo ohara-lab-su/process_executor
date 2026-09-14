@@ -1,13 +1,10 @@
-import time
-from pm2cd_multi import PM2CD
+from multi.pm2cd_multi import PM2CD
 from x_logger import XLogger
 
 IP_ADDRESS = "10.170.10.62"
-
 PORT = 7777
 TIMEOUT_SEC = 3.0
 MOTOR = 0
-# TEST_PULSE = 10
 MOTION_TIMEOUT_SEC = 30.0
 
 
@@ -19,10 +16,9 @@ def main() -> None:
         timeout_sec=TIMEOUT_SEC,
         logger=logger,
     )
+
     try:
-        # ctrl.emergency_stop_all()
-        ctrl.emergency_stop_all()
-        time.sleep(0.05)
+        ctrl.stop()
         ctrl.remote()
         status = ctrl.get_status(MOTOR)
 
@@ -35,15 +31,7 @@ def main() -> None:
 
         before = ctrl.get_position(MOTOR)
 
-        # target = before + T1EST_PULSE
-        # target = before + 10
-        # target = before + 10
-
-        # if target > 8388607:
-        #     # target = before - TEST_PULSE
-        #     target = before - 10
-        # target = 0
-        target = 1000
+        target = 0
 
         print(f"[INFO] {'move'}: {target}")
         ctrl.move(MOTOR, target, backlash=False)
@@ -57,12 +45,11 @@ def main() -> None:
         if ctrl.get_position(MOTOR) != target:
             raise AssertionError("ABS移動位置不一致")
 
-        # ctrl.move(MOTOR, before, backlash=False)
-        # ctrl.wait_stop(MOTOR, timeout_sec=MOTION_TIMEOUT_SEC)
-        # print(f"[PASS] {'move'}: {'OK'}")
+        print(f"[PASS] {'move'}: {'OK'}")
+
     finally:
         try:
-            ctrl.stop(MOTOR)
+            ctrl.emergency_stop_all()
         finally:
             ctrl.close()
 
