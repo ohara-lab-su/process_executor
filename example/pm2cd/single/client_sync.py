@@ -1,14 +1,14 @@
 #!/usr/bin/env python
 # coding: utf-8
-"""PM2CD 用の非同期 FastAPI クライアント。"""
+"""PM16C16 用の同期 FastAPI クライアント。"""
 
 from typing import Any, Optional
 
-from ese774_frame.clients.async_device_client import AsyncDeviceClient
+from ese774_frame.clients.sync_device_client import SyncDeviceClient
 
 
-class AsyncPM2CDClient(AsyncDeviceClient):
-    """PM2CD へ接続する非同期クライアント。"""
+class SyncPM2CDClient(SyncDeviceClient):
+    """PM2CD FastAPI サーバーへ接続する同期クライアント。"""
 
     def __init__(
         self,
