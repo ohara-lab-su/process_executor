@@ -1,7 +1,6 @@
 from multi.pm2cd_multi import PM2CD
 from x_logger import XLogger
 
-
 IP_ADDRESS = "10.170.10.62"
 PORT = 7777
 TIMEOUT_SEC = 3.0
