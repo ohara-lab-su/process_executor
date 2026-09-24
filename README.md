@@ -8,6 +8,75 @@
 
 ---
 
+## Quick Start
+
+### インストール
+
+repository root で実行する。
+
+```bash
+pip install -e .
+```
+
+### 最小構成
+
+既存クラスを `worker_class` に渡す。
+
+```python
+from process_executor import ProcessExecutor
+
+
+class Calculator:
+    def add(self, a: int, b: int) -> int:
+        return a + b
+
+
+def main() -> None:
+    with ProcessExecutor(
+        worker_class=Calculator,
+        worker_count=2,
+        start_method="spawn",
+    ) as executor:
+        job_id = executor.submit("add", 10, 20)
+        result = executor.wait(job_id, timeout_sec=5.0)
+        print(result)
+
+
+if __name__ == "__main__":
+    main()
+```
+
+`Calculator` 自体には multiprocessing 用の実装を追加しない。各 worker process 内で `Calculator()` が生成され、`submit("add", 10, 20)` によって、その worker-local instance の `add(10, 20)` が実行される。
+
+### 非同期に job を扱う
+
+```python
+job_id = executor.submit("add", 10, 20)
+
+print(executor.state(job_id))
+print(executor.job(job_id))
+print(executor.workers())
+```
+
+`result()` は待機しない。完了待機が必要な場合は `wait()` を使用する。
+
+---
+
+## README の読み方
+
+この README は次の順序で読むことを想定している。
+
+1. **Quick Start** — 最小構成で実行する。
+2. **なぜこのプログラムを作ったのか** — 導入目的を理解する。
+3. **設計の中心** — 既存 Ctrl と multiprocessing を分離する理由を理解する。
+4. **worker / job / SharedContext** — 内部実行モデルを理解する。
+5. **example** — generic class、既存制御 class、PM2CD での具体的利用方法を見る。
+6. **追加設計が必要なケース / 責務境界** — ProcessExecutor が意図的に扱わない範囲を確認する。
+
+GitHub Pages では、この手動ドキュメントに加えて `src/process_executor` を Sphinx で機械的に解析した API reference を生成する。
+
+---
+
 ## 1. なぜこのプログラムを作ったのか
 
 装置制御コードは、まず通常の同期クラスとして実装するのが自然である。
