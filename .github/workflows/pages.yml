@@ -31,10 +31,9 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Install package and documentation dependencies
+      - name: Install documentation dependencies
         run: |
           python -m pip install -U pip
-          python -m pip install -e .
           python -m pip install sphinx myst-parser sphinx-rtd-theme linkify-it-py
 
       - name: Build documentation
