@@ -10,7 +10,6 @@
 - README に Quick Start と読み順を追加し、既存の詳細な設計・example・責務境界の説明は保持。
 - GitHub Actions から `docs/build.sh` を実行し、`docs/_build/html` を GitHub Pages に deploy する workflow を追加。
 
-
 # process-executor v0.1.1
 
 v0.1.1 では、PM2CD example の multi 構成を見直し、複数 worker process を使用しながら、物理装置との通信を1本に集約できる構成へ変更した。
