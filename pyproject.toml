@@ -3,7 +3,8 @@ requires = ["setuptools>=71.0", "coloredlogs"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "process-executor"
+#name = "process-executor"
+name = "proc-executor"
 version = "0.1.2"
 
 description = "Reusable multiprocessing execution support for controller classes"
