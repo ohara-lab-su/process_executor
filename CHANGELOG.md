@@ -1,6 +1,6 @@
 # CHANGELOG
 
-## Unreleased
+## v0.1.2
 
 ### Documentation / GitHub Pages
 
@@ -9,6 +9,7 @@
 - 手動 Markdown documentation と source code から生成する API reference を分離。
 - README に Quick Start と読み順を追加し、既存の詳細な設計・example・責務境界の説明は保持。
 - GitHub Actions から `docs/build.sh` を実行し、`docs/_build/html` を GitHub Pages に deploy する workflow を追加。
+- PyPI用 worker
 
 # process-executor v0.1.1
 

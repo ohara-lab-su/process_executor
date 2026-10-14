@@ -1,10 +1,19 @@
 # process-executor
 
-`process-executor` は、通常の Python クラスを multiprocessing の worker process 上で実行するための汎用実行基盤である。特に、すでに単体で完成している装置制御用 Ctrl クラスを、multiprocessing のためだけに書き直さず利用することを主目的としている。
+`process-executor` は、
+通常の Python クラスを multiprocessing
+の worker process 上で実行するための汎用実行基盤である。
+特に、すでに単体で完成している装置制御用 Ctrl クラスを、
+multiprocessing のためだけに書き直さず利用することを主目的としている。
 
-現在のバージョンは **0.1.1** である。
+設計・方針自体も含めて検討中コードであるが、運用しながら詰めていくことになる。
 
-本 README は導入手順だけではなく、現在の設計理由、責務分離、内部構造、public API、制約、および実際の example をまとめた仕様書兼チュートリアルである。
+本 README は導入手順だけではなく、
+現在の設計理由、
+責務分離、
+内部構造、
+public API、
+制約、および実際の example をまとめた仕様書兼チュートリアルである。
 
 ---
 
