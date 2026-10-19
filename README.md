@@ -1,5 +1,8 @@
 # process-executor
 
+[![en](https://img.shields.io/badge/lang-en-red.svg)](https://github.com/ohara-lab-su/process_executor/blob/main/README.en.md)
+[![ja](https://img.shields.io/badge/lang-ja-yellow.svg)](https://github.com/ohara-lab-su/process_executor/blob/main/README.md)
+
 `process-executor` は、
 通常の Python クラスを multiprocessing
 の worker process 上で実行するための汎用実行基盤である。
