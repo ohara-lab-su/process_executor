@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 #name = "process-executor"
 name = "proc-executor"
-version = "0.1.3"
+version = "0.1.4"
 
 description = "Reusable multiprocessing execution support for controller classes"
 authors = [
