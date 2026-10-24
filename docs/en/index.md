@@ -1,6 +1,7 @@
 # Process Executor
 
-[English](https://ohara-lab-su.github.io/process-executor/en/) | [日本語](https://ohara-lab-su.github.io/process-executor/ja/)
+[![en](https://img.shields.io/badge/lang-en-red.svg)](https://ohara-lab-su.github.io/process_executor/en/)
+[![ja](https://img.shields.io/badge/lang-ja-blue.svg)](https://ohara-lab-su.github.io/process_executor/ja/)
 
 Documentation for process-executor.
 
