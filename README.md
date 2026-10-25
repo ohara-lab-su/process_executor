@@ -3,6 +3,11 @@
 [![en](https://img.shields.io/badge/lang-en-red.svg)](https://github.com/ohara-lab-su/process_executor/blob/main/README.en.md)
 [![ja](https://img.shields.io/badge/lang-ja-yellow.svg)](https://github.com/ohara-lab-su/process_executor/blob/main/README.md)
 
+[![GitHub](https://img.shields.io/badge/GitHub-ohara--lab--su%2Fprocess_executor-181717?logo=github)](https://github.com/ohara-lab-su/process_executor/)
+[![GitHub Pages](https://img.shields.io/badge/GitHub%20Pages-Documentation-222222?logo=githubpages&logoColor=white)](https://ohara-lab-su.github.io/process_executor/en/)
+[![Ohara Lab](https://img.shields.io/badge/Ohara%20Lab-Home-4B5563?logo=homeassistant&logoColor=white)](https://ohara-lab-su.github.io/index.en.html)
+
+
 `process-executor` is a general-purpose execution framework for running ordinary Python classes in multiprocessing worker processes. Its primary goal is to reuse existing, independently developed device-control (Ctrl) classes without rewriting them solely for multiprocessing.
 
 The code, including its design and underlying policies, is still under evaluation and will be refined through practical use.
