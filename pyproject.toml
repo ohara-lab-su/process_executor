@@ -7,7 +7,7 @@ build-backend = "setuptools.build_meta"
 name = "proc-executor"
 version = "0.1.4"
 
-description = "Reusable multiprocessing execution support for controller classes"
+description = "Reusable multiprocessing execution support for Python controller classes."
 authors = [
     { name = "Kengo NAKADA", email = "kengo.nakada@email.com" },
     #{ name = "Kentaro Kobayashi", email = "kobayashi@mat.shimane-u.ac.jp" }
@@ -52,3 +52,8 @@ line-length = 88
 
 [tool.isort]
 profile = "black"
+[project.urls]
+Homepage = "https://ohara-lab-su.github.io/proc_executor/"
+Documentation = "https://ohara-lab-su.github.io/proc_executor/"
+Repository = "https://github.com/ohara-lab-su/proc_executor"
+Issues = "https://github.com/ohara-lab-su/proc_executor/issues"
